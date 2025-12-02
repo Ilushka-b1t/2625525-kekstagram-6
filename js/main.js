@@ -1,3 +1,3 @@
-import { getInformationPhotos } from './photosDataGeneration.js';
+import './thumbnails.js';
 
-console.log(getInformationPhotos());
+
