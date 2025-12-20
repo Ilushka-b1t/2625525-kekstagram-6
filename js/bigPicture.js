@@ -101,4 +101,4 @@ const openFullSizeImage = (photo) => {
 
 closeModalButton.addEventListener('click', closeFullSizeImage);
 
-export { openFullSizeImage as openBigPicture };
+export default openFullSizeImage;

@@ -27,4 +27,4 @@ const renderPictures = () => {
   container.appendChild(fragment);
 };
 
-export { renderPictures };
+export default renderPictures;
