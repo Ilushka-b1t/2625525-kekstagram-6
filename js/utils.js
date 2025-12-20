@@ -36,3 +36,16 @@ export function createDebounce(callbackFunction, delay = 500) {
     timerId = setTimeout(() => callbackFunction.apply(this, argumentsList), delay);
   };
 }
+
+
+export function createThrottle(callback, interval) {
+  let previousTime = 0;
+
+  return (...args) => {
+    const currentTime = Date.now();
+    if (currentTime - previousTime >= interval) {
+      callback.apply(this, args);
+      previousTime = currentTime;
+    }
+  };
+}

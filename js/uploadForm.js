@@ -1,7 +1,7 @@
 import { resetImageSettings } from './photoEffects.js';
 import { sendData } from './api.js';
 import { showSuccess, showError } from './message.js';
-
+import { handleImageUpload } from './uploadImage.js';
 
 const MAX_HASHTAGS = 5;
 const MAX_COMMENT_LENGTH = 140;
@@ -102,6 +102,7 @@ function enableSubmitButton() {
 function onFileChange() {
   if (filePicker.files.length) {
     openUploadModal();
+    handleImageUpload();
   }
 }
 
