@@ -1,130 +1,161 @@
 import { resetImageSettings } from './photoEffects.js';
+import { sendData } from './api.js';
+import { showSuccess, showError } from './message.js';
+
+
+const MAX_HASHTAGS = 5;
+const MAX_COMMENT_LENGTH = 140;
+const HASHTAG_PATTERN = /^#[a-zA-Zа-яА-Я0-9]{1,19}$/;
+
+const ButtonText = {
+  IDLE: 'Опубликовать',
+  PROCESSING: 'Публикую...'
+};
+
 
 const filePicker = document.getElementById('upload-file');
-const uploadOverlay = document.querySelector('.img-upload__overlay');
-const documentBody = document.body;
+const uploadModal = document.querySelector('.img-upload__overlay');
+const pageBody = document.body;
 const cancelButton = document.querySelector('.img-upload__cancel');
-const hashtagsField = document.querySelector('.text__hashtags');
-const commentField = document.querySelector('.text__description');
+const hashtagsInput = document.querySelector('.text__hashtags');
+const commentInput = document.querySelector('.text__description');
 const uploadForm = document.querySelector('.img-upload__form');
+const submitButton = document.querySelector('.img-upload__submit');
 
-const validation = new Pristine(uploadForm, {
+
+const validator = new Pristine(uploadForm, {
   classTo: 'img-upload__field-wrapper',
   errorTextParent: 'img-upload__field-wrapper',
   errorTextClass: 'img-upload__field-wrapper--error',
 });
 
-const openUploadModal = () => {
-  uploadOverlay.classList.remove('hidden');
-  documentBody.classList.add('modal-open');
-  document.addEventListener('keydown', escapeKeyHandler);
-};
 
-filePicker.addEventListener('change', () => {
+function parseHashtags(value) {
+  return value.trim().split(' ').filter((tag) => tag.trim().length);
+}
+
+function checkHashtagFormat(value) {
+  if (value.length === 0) {
+    return true;
+  }
+  const hashtags = parseHashtags(value);
+  return hashtags.every((tag) => HASHTAG_PATTERN.test(tag));
+}
+
+function checkHashtagCount(value) {
+  const hashtags = parseHashtags(value);
+  return hashtags.length <= MAX_HASHTAGS;
+}
+
+function checkHashtagUniqueness(value) {
+  const hashtags = parseHashtags(value);
+  const lowerCaseTags = hashtags.map((tag) => tag.toLowerCase());
+  return lowerCaseTags.length === new Set(lowerCaseTags).size;
+}
+
+function checkCommentLength(value) {
+  return value.length <= MAX_COMMENT_LENGTH;
+}
+
+
+validator.addValidator(hashtagsInput, checkHashtagFormat, 'Хэштег должен начинаться с # и содержать только буквы и цифры (макс. 20 символов)');
+validator.addValidator(hashtagsInput, checkHashtagCount, `Разрешено не более ${MAX_HASHTAGS} хэштегов`);
+validator.addValidator(hashtagsInput, checkHashtagUniqueness, 'Хэштеги не могут повторяться');
+validator.addValidator(commentInput, checkCommentLength, `Длина комментария не должна превышать ${MAX_COMMENT_LENGTH} символов`);
+
+
+function openUploadModal() {
+  uploadModal.classList.remove('hidden');
+  pageBody.classList.add('modal-open');
+  document.addEventListener('keydown', handleDocumentKeydown);
+}
+
+function closeUploadModal() {
+  uploadModal.classList.add('hidden');
+  pageBody.classList.remove('modal-open');
+  document.removeEventListener('keydown', handleDocumentKeydown);
+
+  resetImageSettings();
+  resetForm();
+}
+
+function resetForm() {
+  uploadForm.reset();
+  validator.reset();
+  filePicker.value = '';
+  hashtagsInput.value = '';
+  commentInput.value = '';
+  enableSubmitButton();
+}
+
+function disableSubmitButton() {
+  submitButton.disabled = true;
+  submitButton.textContent = ButtonText.PROCESSING;
+}
+
+function enableSubmitButton() {
+  submitButton.disabled = false;
+  submitButton.textContent = ButtonText.IDLE;
+}
+
+
+function onFileChange() {
   if (filePicker.files.length) {
     openUploadModal();
   }
-});
+}
 
-const resetUploadForm = () => {
-  uploadForm.reset();
-  validation.reset();
-  filePicker.value = '';
-  hashtagsField.value = '';
-  commentField.value = '';
-};
-
-const closeUploadModal = () => {
-  uploadOverlay.classList.add('hidden');
-  documentBody.classList.remove('modal-open');
-  document.removeEventListener('keydown', escapeKeyHandler);
-
-  resetImageSettings();
-
-  resetUploadForm();
-};
-
-cancelButton.addEventListener('click', (event) => {
+function onCancelClick(event) {
   event.preventDefault();
   closeUploadModal();
-});
+}
 
-function escapeKeyHandler(event) {
+function handleDocumentKeydown(event) {
   if (event.key === 'Escape') {
-    const focusedElement = document.activeElement;
-    const isTextInput = focusedElement === hashtagsField || focusedElement === commentField;
+    const activeElement = document.activeElement;
+    const isTextFocused = activeElement === hashtagsInput || activeElement === commentInput;
+    const hasErrorMessage = document.querySelector('.error');
 
-    if (!isTextInput) {
+    if (!isTextFocused && !hasErrorMessage) {
+      event.preventDefault();
       closeUploadModal();
     }
   }
 }
 
-uploadForm.addEventListener('submit', (event) => {
-  const isValid = validation.validate();
-
-  if (!isValid) {
-    event.preventDefault();
+function stopEscapePropagation(event) {
+  if (event.key === 'Escape') {
+    event.stopPropagation();
   }
-});
+}
 
+function handleFormSubmit(event) {
+  event.preventDefault();
 
-const checkCommentLength = (text) => text.length <= 140;
-
-validation.addValidator(
-  commentField,
-  checkCommentLength,
-  'Длина комментария не должна превышать 140 символов'
-);
-
-const checkHashtagsFormat = (hashtagsText) => {
-  const pattern = /^#[a-zA-Zа-яА-Я0-9]{1,19}$/;
-
-  const trimmedText = hashtagsText.trim();
-  if (trimmedText.length === 0) {
-    return true;
+  const isValid = validator.validate();
+  if (isValid) {
+    disableSubmitButton();
+    sendData(new FormData(event.target))
+      .then(() => {
+        closeUploadModal();
+        showSuccess();
+      })
+      .catch(() => {
+        showError();
+      })
+      .finally(() => {
+        enableSubmitButton();
+      });
   }
+}
 
-  const hashtagArray = trimmedText.split(/\s+/);
-  if (hashtagArray.length > 5) {
-    return false;
-  }
 
-  const lowerCaseHashtags = hashtagArray.map((tag) => tag.toLowerCase());
-  if (new Set(lowerCaseHashtags).size !== hashtagArray.length) {
-    return false;
-  }
+function initUploadForm() {
+  filePicker.addEventListener('change', onFileChange);
+  cancelButton.addEventListener('click', onCancelClick);
+  hashtagsInput.addEventListener('keydown', stopEscapePropagation);
+  commentInput.addEventListener('keydown', stopEscapePropagation);
+  uploadForm.addEventListener('submit', handleFormSubmit);
+}
 
-  return hashtagArray.every((tag) => pattern.test(tag));
-};
-
-const generateHashtagErrorMessage = (hashtagsText) => {
-  const pattern = /^#[a-zA-Zа-яА-Я0-9]{1,19}$/;
-
-  const trimmedText = hashtagsText.trim();
-  if (trimmedText.length === 0) {
-    return '';
-  }
-
-  const hashtagArray = trimmedText.split(/\s+/);
-  if (hashtagArray.length > 5) {
-    return 'Разрешено не более 5 хэштегов';
-  }
-
-  const lowerCaseHashtags = hashtagArray.map((tag) => tag.toLowerCase());
-  if (new Set(lowerCaseHashtags).size !== lowerCaseHashtags.length) {
-    return 'Хэштеги не могут повторяться';
-  }
-
-  if (!hashtagArray.every((tag) => pattern.test(tag))) {
-    return 'Хэштег должен начинаться с # и содержать только буквы и цифры (макс. 20 символов)';
-  }
-
-  return '';
-};
-
-validation.addValidator(
-  hashtagsField,
-  checkHashtagsFormat,
-  generateHashtagErrorMessage
-);
+export { initUploadForm };
