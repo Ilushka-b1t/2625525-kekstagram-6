@@ -26,3 +26,13 @@ export function displayAlert(message) {
     alertElement.remove();
   }, ALERT_SHOW_TIME);
 }
+
+
+export function createDebounce(callbackFunction, delay = 500) {
+  let timerId;
+
+  return (...argumentsList) => {
+    clearTimeout(timerId);
+    timerId = setTimeout(() => callbackFunction.apply(this, argumentsList), delay);
+  };
+}
