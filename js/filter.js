@@ -1,4 +1,4 @@
-import { createDebounce } from './util.js';
+import { createDebounce } from './utils.js';
 import renderPictures from './thumbnails.js';
 
 const FILTER = {
